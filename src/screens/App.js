@@ -11,13 +11,23 @@ import React, {useEffect, useState} from 'react';
 import {database} from '../data/database';
 
 const App = () => {
+  const dbRef = database.get('notes');
   const [showCard, setShowCard] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [notes, setNotes] = useState([]);
+  const [type, setType] = useState('add');
+  const [selectedId, setSelectedId] = useState('');
+
+  const clearValues = () => {
+    setTitle('');
+    setDescription('');
+    setType('add');
+    setSelectedId('');
+  };
 
   const getAllNotes = () => {
-    const notesData = database.get('notes');
+    const notesData = dbRef;
     notesData
       .query()
       .observe()
@@ -33,19 +43,37 @@ const App = () => {
   const addNote = async () => {
     console.log(title, description);
     await database.write(async () => {
-      await database.get('notes').create(note => {
+      await dbRef.create(note => {
         note.note = title;
         note.description = description;
       });
     });
     console.log('Added successfully.');
     setShowCard(false);
+    clearValues();
     getAllNotes();
   };
 
-  const deleteNote = () => {};
+  const deleteNote = async id => {
+    await database.write(async () => {
+      const noteToDelete = await dbRef.find(id);
+      await noteToDelete.destroyPermanently();
+      getAllNotes();
+    });
+  };
 
-  const updateNote = () => {};
+  const updateNote = async () => {
+    await database.write(async () => {
+      const noteToUpdate = await dbRef.find(selectedId);
+      await noteToUpdate.update(item => {
+        item.note = title;
+        item.description = description;
+      });
+      getAllNotes();
+      clearValues();
+      setShowCard(false);
+    });
+  };
 
   useEffect(() => {
     getAllNotes();
@@ -56,7 +84,9 @@ const App = () => {
       {/* /Add note card */}
       {showCard && (
         <View style={style.addNoteCard}>
-          <Text style={style.title}>Add Note</Text>
+          <Text style={style.title}>
+            {type == 'add' ? 'Add Note' : 'Update Note'}
+          </Text>
           <TextInput
             placeholder="Enter note title"
             style={style.textInput}
@@ -75,11 +105,22 @@ const App = () => {
               style={style.cancelBtn}
               onPress={() => {
                 setShowCard(false);
+                clearValues();
               }}>
               <Text style={style.cancelTxt}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={style.addBtn} onPress={addNote}>
-              <Text style={style.addNoteTxt}>Add Note</Text>
+            <TouchableOpacity
+              style={style.addBtn}
+              onPress={() => {
+                if (type == 'add') {
+                  addNote();
+                } else {
+                  updateNote();
+                }
+              }}>
+              <Text style={style.addNoteTxt}>
+                {type == 'add' ? 'Add Note' : 'Update'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -90,8 +131,30 @@ const App = () => {
           renderItem={({item, index}) => {
             return (
               <View style={style.flatListItem}>
-                <Text style={style.cancelTxt}>{item.note}</Text>
-                <Text style={style.text15}>{item.description}</Text>
+                <View style={style.centerHorizontally}>
+                  <Text style={style.cancelTxt}>{item.note}</Text>
+                  <Text style={style.text15}>{item.description}</Text>
+                </View>
+                <View style={style.centerHorizontally}>
+                  <Text
+                    style={{color: 'blue'}}
+                    onPress={() => {
+                      setType('edit');
+                      setTitle(item.note);
+                      setDescription(item.description);
+                      setSelectedId(item.id);
+                      setShowCard(true);
+                    }}>
+                    Update
+                  </Text>
+                  <Text
+                    style={{color: 'red', marginTop: 10}}
+                    onPress={() => {
+                      deleteNote(item.id);
+                    }}>
+                    Delete
+                  </Text>
+                </View>
               </View>
             );
           }}
@@ -100,6 +163,7 @@ const App = () => {
       <TouchableOpacity
         style={style.addNoteBg}
         onPress={() => {
+          clearValues();
           setShowCard(true);
         }}>
         <Text style={style.addNoteTxt}>Add New Note</Text>
@@ -174,9 +238,14 @@ const style = StyleSheet.create({
     alignSelf: 'center',
     justifyContent: 'center',
     marginTop: 20,
-    paddingStart: 10
+    padding: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderRadius: 8,
+    backgroundColor: '#E5E4E2'
   },
   text15: {fontSize: 15},
+  centerHorizontally: {justifyContent: 'center'},
 });
 
 export default App;
